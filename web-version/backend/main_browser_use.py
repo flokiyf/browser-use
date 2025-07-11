@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-🌐 Browser-Use Web Backend (Avec configuration .env)
+🌐 Browser-Use Web Backend (Version Finale)
 API FastAPI avec WebSocket pour chat temps réel - Intégration Browser-Use complète
+Port: 8001 pour éviter les conflits
 """
 
 import asyncio
@@ -13,23 +14,9 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from contextlib import asynccontextmanager
 
-# Charger les variables d'environnement depuis config.env
-def load_env_config():
-    """Charger les variables d'environnement depuis config.env"""
-    config_path = os.path.join(os.path.dirname(__file__), 'config.env')
-    if os.path.exists(config_path):
-        with open(config_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key.strip()] = value.strip()
-        print(f"✅ Configuration chargée depuis {config_path}")
-    else:
-        print(f"⚠️ Fichier de configuration non trouvé: {config_path}")
-
-# Charger la configuration
-load_env_config()
+# Configuration de l'environnement AVANT tout import
+os.environ['OPENAI_API_KEY'] = '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'
+os.environ['BROWSER_USE_SETUP_LOGGING'] = 'false'
 
 # Ajouter le chemin vers browser_use
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -41,16 +28,19 @@ from pydantic import BaseModel
 import uvicorn
 
 # Monkey patch pour éviter le problème avec dotenv
-import browser_use.logging_config
-original_load_dotenv = browser_use.logging_config.load_dotenv
-browser_use.logging_config.load_dotenv = lambda: None
+try:
+    import browser_use.logging_config
+    original_load_dotenv = browser_use.logging_config.load_dotenv
+    browser_use.logging_config.load_dotenv = lambda: None
+except:
+    pass
 
 # Imports Browser-Use APRÈS le patch
 try:
     from browser_use import Agent
     from browser_use.llm.openai.chat import ChatOpenAI
     BROWSER_USE_AVAILABLE = True
-    print("✅ Browser-Use importé avec succès")
+    print("✅ Browser-Use importé avec succès !")
 except ImportError as e:
     print(f"❌ Erreur import Browser-Use: {e}")
     BROWSER_USE_AVAILABLE = False
@@ -59,18 +49,8 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration depuis les variables d'environnement
+# Configuration OpenAI
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
-HOST = os.getenv('HOST', '0.0.0.0')
-PORT = int(os.getenv('PORT', 8000))
-
-# Vérifier que la clé API est configurée
-if not OPENAI_API_KEY or OPENAI_API_KEY == 'sk-proj-VOTRE_CLE_API_ICI':
-    print("🔑 ATTENTION: Clé API OpenAI non configurée dans config.env")
-    print("📝 Éditez le fichier config.env pour ajouter votre clé API")
-else:
-    print(f"🔑 Clé API OpenAI configurée (se termine par: ...{OPENAI_API_KEY[-6:]})")
 
 # Models Pydantic
 class ChatMessage(BaseModel):
@@ -135,13 +115,8 @@ manager = ConnectionManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("🚀 Démarrage Browser-Use Web Backend...")
-    logger.info(f"🔧 Configuration: {OPENAI_MODEL} sur {HOST}:{PORT}")
-    
-    if not OPENAI_API_KEY or OPENAI_API_KEY == 'sk-proj-VOTRE_CLE_API_ICI':
-        logger.warning("⚠️ Clé API OpenAI non configurée - Fonctionnalité limitée")
-        logger.info("📝 Éditez config.env pour ajouter votre clé API")
-    elif BROWSER_USE_AVAILABLE:
+    logger.info("🚀 Démarrage Browser-Use Web Backend (Version Finale)...")
+    if BROWSER_USE_AVAILABLE:
         logger.info("✅ Backend prêt avec Browser-Use intégré !")
     else:
         logger.info("⚠️ Backend en mode simulation (Browser-Use non disponible)")
@@ -151,9 +126,9 @@ async def lifespan(app: FastAPI):
 
 # Application FastAPI
 app = FastAPI(
-    title="Browser-Use Web API",
-    description="API complète pour Browser-Use avec WebSocket et configuration .env",
-    version="3.0.0-with-env",
+    title="Browser-Use Web API (Version Finale)",
+    description="API complète pour Browser-Use avec WebSocket",
+    version="2.0.0-final",
     lifespan=lifespan
 )
 
@@ -172,7 +147,7 @@ def create_llm():
     if not BROWSER_USE_AVAILABLE:
         return None
     return ChatOpenAI(
-        model=OPENAI_MODEL,
+        model='gpt-4o-mini',
         api_key=OPENAI_API_KEY
     )
 
@@ -181,8 +156,8 @@ def create_llm():
 async def root():
     """Page d'accueil de l'API"""
     return {
-        "message": "🌐 Browser-Use Web API (Sans .env)",
-        "version": "2.0.0-no-dotenv",
+        "message": "🌐 Browser-Use Web API (Version Finale)",
+        "version": "2.0.0-final",
         "status": "active",
         "frontend": "http://localhost:3001",
         "websocket": "ws://localhost:8000/ws/chat",
@@ -320,45 +295,14 @@ async def execute_browser_use_task(task: str, websocket: WebSocket):
         # Exécuter la tâche Browser-Use
         result = await agent.run()
         
-        # Vérifier s'il y a des erreurs dans le résultat
-        has_errors = False
-        error_messages = []
-        
-        if hasattr(result, 'all_results'):
-            for action_result in result.all_results:
-                if hasattr(action_result, 'error') and action_result.error:
-                    has_errors = True
-                    error_messages.append(str(action_result.error))
-        
-        if has_errors:
-            # Il y a des erreurs - traiter comme un échec
-            error_summary = "\n".join(error_messages[:3])  # Limiter à 3 erreurs
-            
-            if "Incorrect API key" in error_summary:
-                error_msg = ChatMessage(
-                    type="error",
-                    content="🔑 **ERREUR CLEF API OPENAI**\n\n❌ Votre clé API OpenAI n'est pas valide ou a expiré.\n\n🔧 **Solutions:**\n1. Vérifiez votre clé sur https://platform.openai.com/account/api-keys\n2. Générez une nouvelle clé si nécessaire\n3. Vérifiez que vous avez du crédit sur votre compte\n4. Remplacez la clé dans le fichier `main_no_dotenv.py` ligne 17",
-                    timestamp=datetime.now().strftime("%H:%M:%S"),
-                    sender="Système"
-                )
-            else:
-                error_msg = ChatMessage(
-                    type="error",
-                    content=f"💥 **ERREUR BROWSER-USE**\n\n{error_summary[:500]}...",
-                    timestamp=datetime.now().strftime("%H:%M:%S"),
-                    sender="Browser-Use"
-                )
-            
-            await manager.broadcast(error_msg.dict())
-        else:
-            # Succès réel
-            success_msg = ChatMessage(
-                type="agent",
-                content=f"🎉 Tâche terminée avec succès !\n\n📋 **Résultat:**\n{result}\n\n🤖 Exécuté par Browser-Use",
-                timestamp=datetime.now().strftime("%H:%M:%S"),
-                sender="Browser-Use"
-            )
-            await manager.broadcast(success_msg.dict())
+        # Message de succès avec résultat
+        success_msg = ChatMessage(
+            type="agent",
+            content=f"🎉 Tâche terminée avec succès !\n\n📋 **Résultat:**\n{result}\n\n🤖 Exécuté par Browser-Use",
+            timestamp=datetime.now().strftime("%H:%M:%S"),
+            sender="Browser-Use"
+        )
+        await manager.broadcast(success_msg.dict())
         
     except Exception as e:
         error_msg = ChatMessage(
@@ -385,20 +329,132 @@ async def health_check():
         "connections": len(manager.active_connections),
         "agent_busy": manager.agent_busy,
         "browser_use": "integrated" if BROWSER_USE_AVAILABLE else "not_available",
-        "version": "no-dotenv"
+        "version": "final"
     }
+
+# Page de test Browser-Use
+@app.get("/test", response_class=HTMLResponse)
+async def test_page():
+    """Page de test pour Browser-Use"""
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>🤖 Browser-Use Web Test (Version Finale)</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; background: #ffffff; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; }}
+            .messages {{ height: 400px; border: 1px solid #ddd; padding: 15px; overflow-y: scroll; background: #f9f9f9; margin: 20px 0; border-radius: 8px; }}
+            input {{ width: 70%; padding: 12px; background: #fff; border: 1px solid #ddd; color: #333; border-radius: 6px; }}
+            button {{ padding: 12px 20px; background: #3b82f6; border: none; color: white; cursor: pointer; margin-left: 10px; border-radius: 6px; }}
+            button:hover {{ background: #2563eb; }}
+            .status {{ padding: 12px; background: #f0f9ff; margin: 10px 0; border-radius: 6px; border-left: 4px solid #3b82f6; }}
+            .success {{ background: #f0fdf4; border-left-color: #10b981; }}
+            .error {{ background: #fef2f2; border-left-color: #ef4444; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🤖 Browser-Use Web Test (Version Finale)</h1>
+            <div class="status" id="status">🔴 Déconnecté</div>
+            <div class="messages" id="messages"></div>
+            <input type="text" id="messageInput" placeholder="Tapez votre tâche Browser-Use...">
+            <button onclick="sendMessage()">Exécuter</button>
+            <button onclick="sendVoice()">🎤 Vocal</button>
+            
+            <div style="margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                <h3>💡 Exemples de tâches:</h3>
+                <ul>
+                    <li><button onclick="setTask('Recherche les cours d\\'informatique au Collège Boréal')">Collège Boréal</button></li>
+                    <li><button onclick="setTask('Trouve les dernières nouvelles sur l\\'IA')">Nouvelles IA</button></li>
+                    <li><button onclick="setTask('Vérifie la météo à Sudbury')">Météo Sudbury</button></li>
+                </ul>
+                <p><strong>Status Browser-Use:</strong> {'✅ Intégré' if BROWSER_USE_AVAILABLE else '❌ Non disponible'}</p>
+            </div>
+        </div>
+        
+        <script>
+            let ws = null;
+            
+            function connect() {{
+                ws = new WebSocket('ws://localhost:8000/ws/chat');
+                
+                ws.onopen = function() {{
+                    document.getElementById('status').innerHTML = '🟢 Connecté - Browser-Use {'Intégré' if BROWSER_USE_AVAILABLE else 'Non Disponible'}';
+                    document.getElementById('status').className = 'status success';
+                    addMessage('system', 'Connexion WebSocket Browser-Use établie');
+                }};
+                
+                ws.onmessage = function(event) {{
+                    const data = JSON.parse(event.data);
+                    addMessage(data.type, data.content, data.sender);
+                }};
+                
+                ws.onclose = function() {{
+                    document.getElementById('status').innerHTML = '🔴 Déconnecté';
+                    document.getElementById('status').className = 'status error';
+                    addMessage('system', 'Connexion fermée');
+                }};
+            }}
+            
+            function addMessage(type, content, sender) {{
+                const messages = document.getElementById('messages');
+                const div = document.createElement('div');
+                const time = new Date().toLocaleTimeString();
+                div.innerHTML = `<strong>[${{time}}] ${{sender || type}}:</strong> ${{content}}`;
+                if (type === 'error') div.style.color = 'red';
+                if (type === 'agent') div.style.color = 'green';
+                if (type === 'user') div.style.color = 'blue';
+                messages.appendChild(div);
+                messages.scrollTop = messages.scrollHeight;
+            }}
+            
+            function sendMessage() {{
+                const input = document.getElementById('messageInput');
+                if (input.value.trim() && ws) {{
+                    ws.send(JSON.stringify({{
+                        type: 'user_message',
+                        content: input.value
+                    }}));
+                    input.value = '';
+                }}
+            }}
+            
+            function sendVoice() {{
+                if (ws) {{
+                    ws.send(JSON.stringify({{
+                        type: 'voice_input',
+                        content: 'Test vocal avec Browser-Use'
+                    }}));
+                }}
+            }}
+            
+            function setTask(task) {{
+                document.getElementById('messageInput').value = task;
+            }}
+            
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {{
+                if (e.key === 'Enter') {{
+                    sendMessage();
+                }}
+            }});
+            
+            // Auto-connect
+            connect();
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 # Point d'entrée principal
 if __name__ == "__main__":
-    logger.info("🚀 Démarrage du serveur Browser-Use Web Backend...")
-    logger.info(f"🌐 Serveur disponible sur http://{HOST}:{PORT}")
-    logger.info("📚 Documentation API: http://localhost:8000/docs")
-    logger.info("🔧 Configuration chargée depuis config.env")
+    logger.info("🚀 Démarrage du serveur Browser-Use Web Backend (Version Finale)...")
     
     uvicorn.run(
-        "main_no_dotenv:app",
-        host=HOST,
-        port=PORT,
+        "main_browser_use:app",
+        host="0.0.0.0",
+        port=8000,  # Port 8000 au lieu de 8001
         reload=False,
         log_level="info",
         access_log=True

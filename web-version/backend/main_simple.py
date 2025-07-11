@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-🌐 Browser-Use Web Backend
-API FastAPI avec WebSocket pour chat temps réel et intégration Browser-Use
+🌐 Browser-Use Web Backend (Version Simple)
+API FastAPI avec WebSocket pour chat temps réel - Version de test
 """
 
 import asyncio
@@ -14,21 +14,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
-
-# Browser-Use integration
-from browser_use import Agent
-from browser_use.llm import ChatOpenAI
 
 # Configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration environnement
-os.environ['OPENAI_API_KEY'] = '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'
+# Configuration environnement (directement dans le code pour éviter .env)
+OPENAI_API_KEY = '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'
 
 # Models Pydantic
 class ChatMessage(BaseModel):
@@ -62,7 +57,7 @@ class ConnectionManager:
         # Message de bienvenue
         welcome_msg = ChatMessage(
             type="system",
-            content="🚀 Browser-Use Web Agent connecté ! Prêt à exécuter vos tâches.",
+            content="🚀 Browser-Use Web Backend connecté ! Version de test active.",
             timestamp=datetime.now().strftime("%H:%M:%S"),
             sender="Système"
         )
@@ -91,7 +86,7 @@ manager = ConnectionManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("🚀 Démarrage Browser-Use Web Backend...")
+    logger.info("🚀 Démarrage Browser-Use Web Backend (Version Simple)...")
     logger.info("✅ Backend prêt !")
     yield
     # Shutdown
@@ -99,9 +94,9 @@ async def lifespan(app: FastAPI):
 
 # Application FastAPI
 app = FastAPI(
-    title="Browser-Use Web API",
-    description="API moderne pour Browser-Use avec WebSocket",
-    version="2.0.0",
+    title="Browser-Use Web API (Simple)",
+    description="API de test pour Browser-Use avec WebSocket",
+    version="2.0.0-simple",
     lifespan=lifespan
 )
 
@@ -120,12 +115,13 @@ app.add_middleware(
 async def root():
     """Page d'accueil de l'API"""
     return {
-        "message": "🌐 Browser-Use Web API",
-        "version": "2.0.0",
+        "message": "🌐 Browser-Use Web API (Version Simple)",
+        "version": "2.0.0-simple",
         "status": "active",
         "frontend": "http://localhost:3000",
         "websocket": "ws://localhost:8000/ws/chat",
-        "docs": "http://localhost:8000/docs"
+        "docs": "http://localhost:8000/docs",
+        "note": "Version de test sans browser-use complet"
     }
 
 @app.get("/api/status")
@@ -139,7 +135,7 @@ async def get_status():
 
 @app.post("/api/execute")
 async def execute_task(request: TaskRequest):
-    """Exécuter une tâche Browser-Use (alternative REST)"""
+    """Exécuter une tâche (simulation pour tests)"""
     if manager.agent_busy:
         raise HTTPException(status_code=409, detail="Agent occupé")
         
@@ -150,32 +146,25 @@ async def execute_task(request: TaskRequest):
         # Broadcast début de tâche
         start_msg = ChatMessage(
             type="system",
-            content=f"🎯 Démarrage de la tâche: {request.task}",
+            content=f"🎯 Simulation de tâche: {request.task}",
             timestamp=datetime.now().strftime("%H:%M:%S"),
             sender="Agent"
         )
         await manager.broadcast(start_msg.dict())
         
-        # Exécution Browser-Use
-        agent = Agent(
-            task=request.task,
-            llm=ChatOpenAI(model=request.model, temperature=request.temperature),
-        )
-        
-        # Exécution asynchrone
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: asyncio.run(agent.run()))
+        # Simulation d'exécution
+        await asyncio.sleep(2)  # Simule le traitement
         
         # Broadcast succès
         success_msg = ChatMessage(
             type="agent",
-            content="✅ Tâche accomplie avec succès !",
+            content="✅ Simulation terminée ! (Version de test)",
             timestamp=datetime.now().strftime("%H:%M:%S"),
             sender="Agent"
         )
         await manager.broadcast(success_msg.dict())
         
-        return {"status": "success", "message": "Tâche exécutée"}
+        return {"status": "success", "message": "Simulation exécutée"}
         
     except Exception as e:
         error_msg = ChatMessage(
@@ -218,8 +207,8 @@ async def websocket_chat(websocket: WebSocket):
                 )
                 await manager.broadcast(user_msg.dict())
                 
-                # Traitement avec Browser-Use
-                await process_task_websocket(task, websocket)
+                # Traitement simulé
+                await process_task_simulation(task, websocket)
                 
             elif data.get("type") == "voice_input":
                 # Traitement vocal
@@ -234,7 +223,7 @@ async def websocket_chat(websocket: WebSocket):
                 
                 # Exécuter si c'est une commande
                 if voice_text.strip():
-                    await process_task_websocket(voice_text, websocket)
+                    await process_task_simulation(voice_text, websocket)
                     
             elif data.get("type") == "ping":
                 # Heartbeat
@@ -247,8 +236,8 @@ async def websocket_chat(websocket: WebSocket):
         logger.error(f"Erreur WebSocket: {e}")
         manager.disconnect(websocket)
 
-async def process_task_websocket(task: str, websocket: WebSocket):
-    """Traiter une tâche Browser-Use via WebSocket"""
+async def process_task_simulation(task: str, websocket: WebSocket):
+    """Simulation de traitement de tâche"""
     if manager.agent_busy:
         busy_msg = ChatMessage(
             type="system",
@@ -266,22 +255,22 @@ async def process_task_websocket(task: str, websocket: WebSocket):
         # Message de démarrage
         start_msg = ChatMessage(
             type="system",
-            content="🔄 Traitement en cours...",
+            content="🔄 Simulation de traitement...",
             timestamp=datetime.now().strftime("%H:%M:%S"),
             sender="Agent"
         )
         await manager.broadcast(start_msg.dict())
         
-        # Simulation de progression (optionnel)
+        # Simulation de progression
         progress_messages = [
-            "🧠 Analyse de la demande...",
-            "🎯 Planification des actions...",
-            "⚡ Exécution en cours...",
-            "✨ Finalisation..."
+            "🧠 Analyse simulée...",
+            "🎯 Planification simulée...",
+            "⚡ Exécution simulée...",
+            "✨ Finalisation simulée..."
         ]
         
         for i, msg in enumerate(progress_messages):
-            await asyncio.sleep(0.5)  # Délai pour l'effet visuel
+            await asyncio.sleep(0.8)  # Délai pour l'effet visuel
             progress_msg = ChatMessage(
                 type="system",
                 content=msg,
@@ -290,20 +279,10 @@ async def process_task_websocket(task: str, websocket: WebSocket):
             )
             await manager.broadcast(progress_msg.dict())
             
-        # Exécution Browser-Use
-        agent = Agent(
-            task=task,
-            llm=ChatOpenAI(model="gpt-4o-mini", temperature=0.7),
-        )
-        
-        # Exécution dans un thread séparé
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: asyncio.run(agent.run()))
-        
         # Message de succès
         success_msg = ChatMessage(
             type="agent",
-            content="🎉 Tâche accomplie avec succès ! L'agent a terminé toutes les actions requises.",
+            content=f"🎉 Simulation terminée ! Tâche: '{task}' (Version de test - Browser-Use sera intégré dans la version finale)",
             timestamp=datetime.now().strftime("%H:%M:%S"),
             sender="Agent"
         )
@@ -312,12 +291,12 @@ async def process_task_websocket(task: str, websocket: WebSocket):
     except Exception as e:
         error_msg = ChatMessage(
             type="error",
-            content=f"💥 Erreur lors de l'exécution: {str(e)[:80]}...",
+            content=f"💥 Erreur lors de la simulation: {str(e)[:80]}...",
             timestamp=datetime.now().strftime("%H:%M:%S"),
             sender="Système"
         )
         await manager.broadcast(error_msg.dict())
-        logger.error(f"Erreur traitement tâche: {e}")
+        logger.error(f"Erreur simulation tâche: {e}")
         
     finally:
         manager.agent_busy = False
@@ -331,18 +310,111 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "connections": len(manager.active_connections),
-        "agent_busy": manager.agent_busy
+        "agent_busy": manager.agent_busy,
+        "version": "simple-test"
     }
+
+# Page de test simple
+@app.get("/test", response_class=HTMLResponse)
+async def test_page():
+    """Page de test simple pour vérifier le WebSocket"""
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>🤖 Browser-Use Web Test</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; background: #0f0f0f; color: white; }
+            .container { max-width: 600px; margin: 0 auto; }
+            .messages { height: 300px; border: 1px solid #333; padding: 10px; overflow-y: scroll; background: #1a1a1a; margin: 20px 0; }
+            input { width: 70%; padding: 10px; background: #2a2a2a; border: 1px solid #444; color: white; }
+            button { padding: 10px 20px; background: #4a9eff; border: none; color: white; cursor: pointer; margin-left: 10px; }
+            .status { padding: 10px; background: #2a2a2a; margin: 10px 0; border-radius: 5px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🤖 Browser-Use Web Test</h1>
+            <div class="status" id="status">🔴 Déconnecté</div>
+            <div class="messages" id="messages"></div>
+            <input type="text" id="messageInput" placeholder="Tapez votre message...">
+            <button onclick="sendMessage()">Envoyer</button>
+            <button onclick="sendVoice()">🎤 Vocal Test</button>
+        </div>
+        
+        <script>
+            let ws = null;
+            
+            function connect() {
+                ws = new WebSocket('ws://localhost:8000/ws/chat');
+                
+                ws.onopen = function() {
+                    document.getElementById('status').innerHTML = '🟢 Connecté';
+                    addMessage('system', 'Connexion WebSocket établie');
+                };
+                
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    addMessage(data.type, data.content, data.sender);
+                };
+                
+                ws.onclose = function() {
+                    document.getElementById('status').innerHTML = '🔴 Déconnecté';
+                    addMessage('system', 'Connexion fermée');
+                };
+            }
+            
+            function addMessage(type, content, sender) {
+                const messages = document.getElementById('messages');
+                const div = document.createElement('div');
+                div.innerHTML = `<strong>${sender || type}:</strong> ${content}`;
+                messages.appendChild(div);
+                messages.scrollTop = messages.scrollHeight;
+            }
+            
+            function sendMessage() {
+                const input = document.getElementById('messageInput');
+                if (input.value.trim() && ws) {
+                    ws.send(JSON.stringify({
+                        type: 'user_message',
+                        content: input.value
+                    }));
+                    input.value = '';
+                }
+            }
+            
+            function sendVoice() {
+                if (ws) {
+                    ws.send(JSON.stringify({
+                        type: 'voice_input',
+                        content: 'Test vocal simulé'
+                    }));
+                }
+            }
+            
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+            
+            // Auto-connect
+            connect();
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 # Point d'entrée principal
 if __name__ == "__main__":
-    logger.info("🚀 Démarrage du serveur Browser-Use Web Backend...")
+    logger.info("🚀 Démarrage du serveur Browser-Use Web Backend (Version Simple)...")
     
     uvicorn.run(
-        "main:app",
+        "main_simple:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=False,  # Désactiver auto-reload
         log_level="info",
         access_log=True
     ) 
