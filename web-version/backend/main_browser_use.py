@@ -31,6 +31,10 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 
+# Configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Monkey patch pour éviter le problème avec dotenv
 try:
     import browser_use.logging_config
@@ -50,13 +54,6 @@ except (ImportError, AttributeError, RuntimeError, ValueError) as e:
     BROWSER_USE_AVAILABLE = False
     Agent = None
     ChatOpenAI = None
-
-# Configuration
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Configuration OpenAI
-# OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') # This line is now redundant as OPENAI_API_KEY is defined globally
 
 # Models Pydantic
 class ChatMessage(BaseModel):

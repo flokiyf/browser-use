@@ -483,9 +483,9 @@ async def test_page():
 # Point d'entrée principal
 if __name__ == "__main__":
     logger.info("🚀 Démarrage du serveur Browser-Use Web Backend (Version Complète)...")
-    
+
     uvicorn.run(
-        "main_real:app",
+        app,
         host="0.0.0.0",
         port=8000,
         reload=False,

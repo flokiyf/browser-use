@@ -55,6 +55,7 @@ class ConnectionManager:
         self.active_connections: List[WebSocket] = []
         self.agent_busy = False
         self.current_task = None
+        self.current_agent = None
         self._lock = asyncio.Lock()
         
     async def connect(self, websocket: WebSocket):
@@ -65,7 +66,7 @@ class ConnectionManager:
         # Message de bienvenue
         welcome_msg = ChatMessage(
             type="system",
-            content="🚀 Browser-Use Web Agent connecté ! Prêt à exécuter vos tâches.",
+            content="🚀 Browser-Use Web Backend connecté !",
             timestamp=datetime.now().strftime("%H:%M:%S"),
             sender="Système"
         )
@@ -100,6 +101,7 @@ class ConnectionManager:
         """Release lock for agent execution"""
         self.agent_busy = False
         self.current_task = None
+        self.current_agent = None
         self._lock.release()
 
 # Instance globale
