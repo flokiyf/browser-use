@@ -6,11 +6,10 @@ API FastAPI avec WebSocket pour chat temps réel - Intégration Browser-Use comp
 
 import asyncio
 import os
-import json
 import logging
 import sys
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List, Optional
 from contextlib import asynccontextmanager
 
 # Charger les variables d'environnement depuis config.env
@@ -39,7 +38,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -174,8 +172,8 @@ app = FastAPI(
 
 # Configuration CORS sécurisée
 allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:3001').split(',')
-# Fix CORS origins parsing by trimming whitespace
-allowed_origins = [origin.strip() for origin in allowed_origins]
+# Fix CORS origins parsing by trimming whitespace and filtering empty strings
+allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,

@@ -96,6 +96,11 @@ def main():
     print("🎮 Frontend: http://localhost:3001")
     print("-" * 50)
     
+    # Vérifier que le répertoire backend existe
+    if not backend_dir.exists():
+        print(f"❌ Répertoire backend non trouvé: {backend_dir}")
+        return
+    
     # Changer vers le répertoire backend
     os.chdir(backend_dir)
     

@@ -52,6 +52,7 @@ class ConnectionManager:
         self.active_connections: List[WebSocket] = []
         self.agent_busy = False
         self.current_task = None
+        self._lock = asyncio.Lock()
         
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -82,6 +83,21 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         for connection in self.active_connections.copy():
             await self.send_personal_message(message, connection)
+            
+    async def acquire_agent_lock(self):
+        """Acquire lock for agent execution"""
+        await self._lock.acquire()
+        if self.agent_busy:
+            self._lock.release()
+            return False
+        self.agent_busy = True
+        return True
+        
+    async def release_agent_lock(self):
+        """Release lock for agent execution"""
+        self.agent_busy = False
+        self.current_task = None
+        self._lock.release()
 
 # Instance globale
 manager = ConnectionManager()
@@ -105,9 +121,12 @@ app = FastAPI(
 )
 
 # Configuration CORS
+allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:3001').split(',')
+allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En production: spécifier les domaines
+    allow_origins=allowed_origins,  # Origines configurables depuis l'environnement
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -140,11 +159,10 @@ async def get_status():
 @app.post("/api/execute")
 async def execute_task(request: TaskRequest):
     """Exécuter une tâche (simulation pour tests)"""
-    if manager.agent_busy:
+    if not await manager.acquire_agent_lock():
         raise HTTPException(status_code=409, detail="Agent occupé")
         
     try:
-        manager.agent_busy = True
         manager.current_task = request.task
         
         # Broadcast début de tâche
@@ -181,8 +199,7 @@ async def execute_task(request: TaskRequest):
         raise HTTPException(status_code=500, detail=str(e))
         
     finally:
-        manager.agent_busy = False
-        manager.current_task = None
+        await manager.release_agent_lock()
 
 # WebSocket pour chat temps réel
 @app.websocket("/ws/chat")
@@ -242,7 +259,7 @@ async def websocket_chat(websocket: WebSocket):
 
 async def process_task_simulation(task: str, websocket: WebSocket):
     """Simulation de traitement de tâche"""
-    if manager.agent_busy:
+    if not await manager.acquire_agent_lock():
         busy_msg = ChatMessage(
             type="system",
             content="⏳ Agent occupé, veuillez patienter...",
@@ -253,7 +270,6 @@ async def process_task_simulation(task: str, websocket: WebSocket):
         return
         
     try:
-        manager.agent_busy = True
         manager.current_task = task
         
         # Message de démarrage
@@ -303,8 +319,7 @@ async def process_task_simulation(task: str, websocket: WebSocket):
         logger.error(f"Erreur simulation tâche: {e}")
         
     finally:
-        manager.agent_busy = False
-        manager.current_task = None
+        await manager.release_agent_lock()
 
 # Route de santé
 @app.get("/health")

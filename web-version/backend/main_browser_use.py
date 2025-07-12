@@ -461,7 +461,7 @@ if __name__ == "__main__":
     logger.info("🚀 Démarrage du serveur Browser-Use Web Backend (Version Finale)...")
     
     uvicorn.run(
-        "main_browser_use:app",
+        app,
         host="0.0.0.0",
         port=8000,  # Port 8000 au lieu de 8001
         reload=False,
