@@ -35,7 +35,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration OpenAI
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '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')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is required")
 
 # Models Pydantic
 class ChatMessage(BaseModel):
@@ -61,6 +63,7 @@ class ConnectionManager:
         self.agent_busy = False
         self.current_task = None
         self.current_agent = None
+        self._lock = asyncio.Lock()
         
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -91,6 +94,22 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         for connection in self.active_connections.copy():
             await self.send_personal_message(message, connection)
+            
+    async def acquire_agent_lock(self):
+        """Acquire lock for agent execution"""
+        await self._lock.acquire()
+        if self.agent_busy:
+            self._lock.release()
+            return False
+        self.agent_busy = True
+        return True
+        
+    async def release_agent_lock(self):
+        """Release lock for agent execution"""
+        self.agent_busy = False
+        self.current_task = None
+        self.current_agent = None
+        self._lock.release()
 
 # Instance globale
 manager = ConnectionManager()
@@ -113,20 +132,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configuration CORS
+# Configuration CORS sécurisée
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En production: spécifier les domaines
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # Seulement les origines autorisées
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
 # Initialiser le modèle LLM
-def create_llm():
-    """Créer une instance du modèle OpenAI"""
+def create_llm(model: str = "gpt-4o-mini", temperature: float = 0.7):
+    """Créer une instance du modèle OpenAI avec paramètres configurables"""
     return ChatOpenAI(
-        model='gpt-4o-mini',
+        model=model,
+        temperature=temperature,
         api_key=OPENAI_API_KEY
     )
 
@@ -156,11 +176,10 @@ async def get_status():
 @app.post("/api/execute")
 async def execute_task(request: TaskRequest):
     """Exécuter une tâche avec Browser-Use"""
-    if manager.agent_busy:
+    if not await manager.acquire_agent_lock():
         raise HTTPException(status_code=409, detail="Agent occupé")
         
     try:
-        manager.agent_busy = True
         manager.current_task = request.task
         
         # Broadcast début de tâche
@@ -172,8 +191,8 @@ async def execute_task(request: TaskRequest):
         )
         await manager.broadcast(start_msg.dict())
         
-        # Créer et exécuter l'agent Browser-Use
-        llm = create_llm()
+        # Créer et exécuter l'agent Browser-Use avec les paramètres du request
+        llm = create_llm(model=request.model, temperature=request.temperature)
         agent = Agent(task=request.task, llm=llm)
         
         # Exécuter la tâche
@@ -202,9 +221,7 @@ async def execute_task(request: TaskRequest):
         raise HTTPException(status_code=500, detail=str(e))
         
     finally:
-        manager.agent_busy = False
-        manager.current_task = None
-        manager.current_agent = None
+        await manager.release_agent_lock()
 
 # WebSocket pour chat temps réel
 @app.websocket("/ws/chat")
@@ -264,7 +281,7 @@ async def websocket_chat(websocket: WebSocket):
 
 async def execute_browser_use_task(task: str, websocket: WebSocket):
     """Exécuter une tâche avec le vrai Browser-Use"""
-    if manager.agent_busy:
+    if not await manager.acquire_agent_lock():
         busy_msg = ChatMessage(
             type="system",
             content="⏳ Browser-Use occupé, veuillez patienter...",
@@ -275,7 +292,6 @@ async def execute_browser_use_task(task: str, websocket: WebSocket):
         return
         
     try:
-        manager.agent_busy = True
         manager.current_task = task
         
         # Message de démarrage
@@ -287,7 +303,7 @@ async def execute_browser_use_task(task: str, websocket: WebSocket):
         )
         await manager.broadcast(start_msg.dict())
         
-        # Créer le modèle LLM
+        # Créer le modèle LLM avec paramètres par défaut
         llm = create_llm()
         
         # Message de progression
@@ -335,9 +351,7 @@ async def execute_browser_use_task(task: str, websocket: WebSocket):
         logger.error(f"Erreur Browser-Use: {e}")
         
     finally:
-        manager.agent_busy = False
-        manager.current_task = None
-        manager.current_agent = None
+        await manager.release_agent_lock()
 
 # Route de santé
 @app.get("/health")

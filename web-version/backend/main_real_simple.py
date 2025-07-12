@@ -16,8 +16,12 @@ from contextlib import asynccontextmanager
 # Ajouter le chemin vers browser_use
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-# Configuration de l'environnement AVANT l'import browser_use
-os.environ['OPENAI_API_KEY'] = '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'
+# Configuration de l'environnement
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is required")
+
+os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
 os.environ['BROWSER_USE_SETUP_LOGGING'] = 'false'  # Éviter les problèmes de logging
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -41,7 +45,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration OpenAI
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+# OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') # This line is now redundant as OPENAI_API_KEY is defined globally
 
 # Models Pydantic
 class ChatMessage(BaseModel):

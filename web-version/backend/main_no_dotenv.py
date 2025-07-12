@@ -31,6 +31,9 @@ def load_env_config():
 # Charger la configuration
 load_env_config()
 
+# Configuration pour éviter les problèmes de logging
+os.environ['BROWSER_USE_SETUP_LOGGING'] = 'false'
+
 # Ajouter le chemin vers browser_use
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -40,12 +43,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 
-# Monkey patch pour éviter le problème avec dotenv
-import browser_use.logging_config
-original_load_dotenv = browser_use.logging_config.load_dotenv
-browser_use.logging_config.load_dotenv = lambda: None
-
-# Imports Browser-Use APRÈS le patch
+# Imports Browser-Use avec gestion d'erreurs
 try:
     from browser_use import Agent
     from browser_use.llm.openai.chat import ChatOpenAI
@@ -96,6 +94,7 @@ class ConnectionManager:
         self.agent_busy = False
         self.current_task = None
         self.current_agent = None
+        self._lock = asyncio.Lock()
         
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -127,6 +126,22 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         for connection in self.active_connections.copy():
             await self.send_personal_message(message, connection)
+            
+    async def acquire_agent_lock(self):
+        """Acquire lock for agent execution"""
+        await self._lock.acquire()
+        if self.agent_busy:
+            self._lock.release()
+            return False
+        self.agent_busy = True
+        return True
+        
+    async def release_agent_lock(self):
+        """Release lock for agent execution"""
+        self.agent_busy = False
+        self.current_task = None
+        self.current_agent = None
+        self._lock.release()
 
 # Instance globale
 manager = ConnectionManager()
@@ -157,22 +172,24 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configuration CORS
+# Configuration CORS sécurisée
+allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:3001').split(',')
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En production: spécifier les domaines
+    allow_origins=allowed_origins,  # Origines configurables depuis l'environnement
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
 # Initialiser le modèle LLM
-def create_llm():
-    """Créer une instance du modèle OpenAI"""
+def create_llm(model: str = None, temperature: float = None):
+    """Créer une instance du modèle OpenAI avec paramètres configurables"""
     if not BROWSER_USE_AVAILABLE:
         return None
     return ChatOpenAI(
-        model=OPENAI_MODEL,
+        model=model or OPENAI_MODEL,
+        temperature=temperature or 0.7,
         api_key=OPENAI_API_KEY
     )
 
@@ -198,6 +215,58 @@ async def get_status():
         current_task=manager.current_task,
         uptime=datetime.now().strftime("%H:%M:%S")
     )
+
+@app.post("/api/execute")
+async def execute_task(request: TaskRequest):
+    """Exécuter une tâche avec Browser-Use"""
+    if not await manager.acquire_agent_lock():
+        raise HTTPException(status_code=409, detail="Agent occupé")
+        
+    try:
+        manager.current_task = request.task
+        
+        # Broadcast début de tâche
+        start_msg = ChatMessage(
+            type="system",
+            content=f"🎯 Exécution avec Browser-Use: {request.task}",
+            timestamp=datetime.now().strftime("%H:%M:%S"),
+            sender="Browser-Use"
+        )
+        await manager.broadcast(start_msg.dict())
+        
+        # Créer et exécuter l'agent Browser-Use avec les paramètres du request
+        llm = create_llm(model=request.model, temperature=request.temperature)
+        if not llm:
+            raise Exception("Browser-Use non disponible")
+        agent = Agent(task=request.task, llm=llm)
+        
+        # Exécuter la tâche
+        result = await agent.run()
+        
+        # Broadcast succès avec résultat
+        success_msg = ChatMessage(
+            type="agent",
+            content=f"✅ Tâche terminée avec succès !\n\nRésultat: {result}",
+            timestamp=datetime.now().strftime("%H:%M:%S"),
+            sender="Browser-Use"
+        )
+        await manager.broadcast(success_msg.dict())
+        
+        return {"status": "success", "result": str(result)}
+        
+    except Exception as e:
+        error_msg = ChatMessage(
+            type="error",
+            content=f"❌ Erreur Browser-Use: {str(e)[:200]}...",
+            timestamp=datetime.now().strftime("%H:%M:%S"),
+            sender="Système"
+        )
+        await manager.broadcast(error_msg.dict())
+        logger.error(f"Erreur Browser-Use: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    finally:
+        await manager.release_agent_lock()
 
 # WebSocket pour chat temps réel
 @app.websocket("/ws/chat")
@@ -257,7 +326,7 @@ async def websocket_chat(websocket: WebSocket):
 
 async def execute_browser_use_task(task: str, websocket: WebSocket):
     """Exécuter une tâche avec le vrai Browser-Use"""
-    if manager.agent_busy:
+    if not await manager.acquire_agent_lock():
         busy_msg = ChatMessage(
             type="system",
             content="⏳ Browser-Use occupé, veuillez patienter...",
@@ -275,10 +344,10 @@ async def execute_browser_use_task(task: str, websocket: WebSocket):
             sender="Système"
         )
         await manager.broadcast(error_msg.dict())
+        await manager.release_agent_lock()
         return
         
     try:
-        manager.agent_busy = True
         manager.current_task = task
         
         # Message de démarrage
@@ -337,7 +406,7 @@ async def execute_browser_use_task(task: str, websocket: WebSocket):
             if "Incorrect API key" in error_summary:
                 error_msg = ChatMessage(
                     type="error",
-                    content="🔑 **ERREUR CLEF API OPENAI**\n\n❌ Votre clé API OpenAI n'est pas valide ou a expiré.\n\n🔧 **Solutions:**\n1. Vérifiez votre clé sur https://platform.openai.com/account/api-keys\n2. Générez une nouvelle clé si nécessaire\n3. Vérifiez que vous avez du crédit sur votre compte\n4. Remplacez la clé dans le fichier `main_no_dotenv.py` ligne 17",
+                    content="🔑 **ERREUR CLEF API OPENAI**\n\n❌ Votre clé API OpenAI n'est pas valide ou a expiré.\n\n🔧 **Solutions:**\n1. Vérifiez votre clé sur https://platform.openai.com/account/api-keys\n2. Générez une nouvelle clé si nécessaire\n3. Vérifiez que vous avez du crédit sur votre compte\n4. Mettez à jour la clé dans config.env",
                     timestamp=datetime.now().strftime("%H:%M:%S"),
                     sender="Système"
                 )
@@ -371,9 +440,7 @@ async def execute_browser_use_task(task: str, websocket: WebSocket):
         logger.error(f"Erreur Browser-Use: {e}")
         
     finally:
-        manager.agent_busy = False
-        manager.current_task = None
-        manager.current_agent = None
+        await manager.release_agent_lock()
 
 # Route de santé
 @app.get("/health")
