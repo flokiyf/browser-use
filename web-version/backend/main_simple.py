@@ -24,8 +24,10 @@ logger = logging.getLogger(__name__)
 
 # Configuration environnement
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+# Note: In this simple version, the API key is not actually used
+# This allows for local execution and automated tests
 if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY environment variable is required")
+    logger.warning("OPENAI_API_KEY not set - running in test mode only")
 
 # Models Pydantic
 class ChatMessage(BaseModel):

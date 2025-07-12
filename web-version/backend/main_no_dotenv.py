@@ -174,10 +174,13 @@ app = FastAPI(
 
 # Configuration CORS sécurisée
 allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:3001').split(',')
+# Fix CORS origins parsing by trimming whitespace
+allowed_origins = [origin.strip() for origin in allowed_origins]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,  # Origines configurables depuis l'environnement
-    allow_credentials=True,
+    allow_origins=allowed_origins,  # Origines spécifiques seulement
+    allow_credentials=False,  # Sécurité renforcée
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )

@@ -18,10 +18,13 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
 
+  // Configuration WebSocket endpoint
+  const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8000/ws/chat'
+
   // Connexion WebSocket
   useEffect(() => {
     const connectWebSocket = () => {
-      const websocket = new WebSocket('ws://localhost:8000/ws/chat')
+      const websocket = new WebSocket(WS_URL)
       
       websocket.onopen = () => {
         setIsConnected(true)
@@ -43,6 +46,14 @@ function App() {
     }
 
     connectWebSocket()
+
+    // Cleanup function to close WebSocket on component unmount
+    return () => {
+      if (ws) {
+        ws.close()
+        setWs(null)
+      }
+    }
   }, [])
 
   // Scroll automatique

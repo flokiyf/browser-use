@@ -396,7 +396,11 @@ async def test_page():
                 const messages = document.getElementById('messages');
                 const div = document.createElement('div');
                 const time = new Date().toLocaleTimeString();
-                div.innerHTML = `<strong>[${{time}}] ${{sender || type}}:</strong> ${{content}}`;
+                // Fix XSS vulnerability by using textContent instead of innerHTML
+                const timeSpan = document.createElement('strong');
+                timeSpan.textContent = `[${time}] ${sender || type}:`;
+                div.appendChild(timeSpan);
+                div.appendChild(document.createTextNode(` ${content}`));
                 if (type === 'error') div.style.color = 'red';
                 if (type === 'agent') div.style.color = 'green';
                 if (type === 'user') div.style.color = 'blue';

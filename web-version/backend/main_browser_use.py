@@ -45,9 +45,11 @@ try:
     from browser_use.llm.openai.chat import ChatOpenAI
     BROWSER_USE_AVAILABLE = True
     print("✅ Browser-Use importé avec succès !")
-except ImportError as e:
-    print(f"❌ Erreur import Browser-Use: {e}")
+except (ImportError, AttributeError, RuntimeError, ValueError) as e:
+    logger.error(f"Erreur d'importation/configuration browser_use: {e}")
     BROWSER_USE_AVAILABLE = False
+    Agent = None
+    ChatOpenAI = None
 
 # Configuration
 logging.basicConfig(level=logging.INFO)
@@ -136,12 +138,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configuration CORS
+# Configuration CORS sécurisée
+allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:3001').split(',')
+allowed_origins = [origin.strip() for origin in allowed_origins]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En production: spécifier les domaines
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=allowed_origins,  # Origines spécifiques seulement
+    allow_credentials=False,  # Sécurité renforcée
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
