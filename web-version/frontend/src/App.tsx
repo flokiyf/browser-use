@@ -23,8 +23,12 @@ function App() {
 
   // Connexion WebSocket
   useEffect(() => {
+    let reconnectTimer: NodeJS.Timeout | null = null;
+    let currentWebsocket: WebSocket | null = null;
+
     const connectWebSocket = () => {
       const websocket = new WebSocket(WS_URL)
+      currentWebsocket = websocket;
       
       websocket.onopen = () => {
         setIsConnected(true)
@@ -39,7 +43,8 @@ function App() {
       
       websocket.onclose = () => {
         setIsConnected(false)
-        setTimeout(connectWebSocket, 3000)
+        // Only reconnect if the component is still mounted
+        reconnectTimer = setTimeout(connectWebSocket, 3000)
       }
       
       setWs(websocket)
@@ -49,9 +54,11 @@ function App() {
 
     // Cleanup function to close WebSocket on component unmount
     return () => {
-      if (ws) {
-        ws.close()
-        setWs(null)
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+      }
+      if (currentWebsocket) {
+        currentWebsocket.close()
       }
     }
   }, [])

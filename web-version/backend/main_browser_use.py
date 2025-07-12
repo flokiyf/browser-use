@@ -36,7 +36,7 @@ try:
     import browser_use.logging_config
     original_load_dotenv = browser_use.logging_config.load_dotenv
     browser_use.logging_config.load_dotenv = lambda: None
-except:
+except Exception:
     pass
 
 # Imports Browser-Use APRÈS le patch
@@ -410,7 +410,10 @@ async def test_page():
                 const messages = document.getElementById('messages');
                 const div = document.createElement('div');
                 const time = new Date().toLocaleTimeString();
-                div.innerHTML = `<strong>[${{time}}] ${{sender || type}}:</strong> ${{content}}`;
+                const timeSpan = document.createElement('strong');
+                timeSpan.textContent = `[${{time}}] ${{sender || type}}:`;
+                div.appendChild(timeSpan);
+                div.appendChild(document.createTextNode(` ${{content}}`));
                 if (type === 'error') div.style.color = 'red';
                 if (type === 'agent') div.style.color = 'green';
                 if (type === 'user') div.style.color = 'blue';

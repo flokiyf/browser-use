@@ -12,14 +12,14 @@
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="http://localhost:3000/" />
+    <meta property="og:url" content="/" />
     <meta property="og:title" content="Browser-Use Web Agent" />
     <meta property="og:description" content="Interface web moderne pour Browser-Use avec chat vocal" />
     <meta property="og:image" content="/og-image.png" />
     
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="http://localhost:3000/" />
+    <meta property="twitter:url" content="/" />
     <meta property="twitter:title" content="Browser-Use Web Agent" />
     <meta property="twitter:description" content="Interface web moderne pour Browser-Use avec chat vocal" />
     <meta property="twitter:image" content="/og-image.png" />
@@ -133,10 +133,8 @@
         console.warn('La reconnaissance vocale n\'est pas supportée dans ce navigateur');
       }
       
-      // Support notification
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
+      // Support notification - Only request on user action
+      // Notification permission will be requested when user interacts with the app
     </script>
     
     <script type="module" src="/src/main.tsx"></script>

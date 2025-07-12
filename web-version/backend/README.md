@@ -14,7 +14,7 @@ Le backend utilise un fichier `config.env` pour stocker les variables d'environn
 2. **Éditez `config.env`** avec vos vraies valeurs :
    ```bash
    # Configuration Browser-Use Web Backend
-   OPENAI_API_KEY=sk-proj-VOTRE_VRAIE_CLE_API_ICI
+   OPENAI_API_KEY=YOUR_OPENAI_API_KEY
    OPENAI_MODEL=gpt-4o-mini
    BROWSER_USE_SETUP_LOGGING=false
    HOST=0.0.0.0

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-🚀 Script de démarrage Browser-Use Web (Version Réelle)
-Lance le backend avec intégration Browser-Use complète
+🚀 Lanceur Browser-Use Web Version Réelle
+Lance automatiquement le backend et le frontend
 """
 
 import os
 import sys
 import subprocess
 import platform
-import time
 from pathlib import Path
 
 def main():
